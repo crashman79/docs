@@ -67,40 +67,43 @@ Webstation is a streaming *companion* to [RomM](romm.md) - it does not manage a 
 sb install sandbox-webstation
 ```
 
-This creates the `romm-webstation` container, a `romm-stream` DNS record, and the matching Traefik route. Webstation is self-configuring via environment variables; it does **not** edit RomM's config - you enable streaming from Romm's side (next section).
+This creates the `romm-webstation` container, a `romm-stream` DNS record, and the matching Traefik route. Webstation is self-configuring via environment variables, and it also writes the streaming block into RomM's `config.yml` for you - no manual RomM configuration is required (RomM's UI exposes no streaming settings).
 
-## Enable streaming in RomM
+## Enable streaming (managed by the role)
 
-Webstation and RomM share only the library (mounted like-for-like); their configs are separate. To point RomM at this container, open RomM → **Settings → Library Management** (the two-way view of `config.yml`) and add a `streaming` block, or paste this into RomM's `config.yml`:
+The `webstation` role automatically injects a `streaming` block into RomM's `config.yml` (delimited by `# BEGIN/END ANSIBLE MANAGED STREAMING (webstation role)`). The block points RomM at this container using the same `BROKER_SECRET` the webstation container runs with, so the two stay in sync across reruns. RomM lists every platform the role supports (see `webstation_role_platforms`), each mapped to its emulator. A representative view of what the role writes:
 
 ```yaml
 streaming:
   enabled: true
   containers:
     - protocol: webstation
-      host: "https://romm-stream.iYOUR_DOMAIN_NAMEi/streaming"
+      host: "https://romm-stream.YOUR_DOMAIN_NAME"
       subfolder: /streaming
       broker_host: "http://romm-webstation:3000"
-      broker_secret: "REPLACE_WITH_WEBSTATION_BROKER_SECRET"
+      broker_secret: "<auto-managed, matches BROKER_SECRET>"
       label: Webstation
+      library_path: /romm/library
       platforms:
-        snes: retroarch
-        amiga: retroarch
+        3do:
+          emulator: retroarch
+          label: 3DO
+        snes:
+          emulator: retroarch
+          label: SNES
         ps2:
           emulator: pcsx2
-          label: PCSX2
-          memory_card_sync: true
+          label: PS2
         ngc:
           emulator: dolphin
-          label: Dolphin
-          memory_card_sync: true
+          label: GameCube
 ```
 
-- `broker_secret` must match Webstation's `BROKER_SECRET`. Read it from the running container: `docker exec romm-webstation printenv BROKER_SECRET`.
-- `broker_host` is the server-to-broker API on the docker network; `host` is the browser-facing URL.
-- List every platform you want to stream; the broker resolves the core per platform. See RomM's [streaming reference](https://docs.romm.app/latest/reference/configuration-file/#streaming) for every key.
+- `broker_secret` is the webstation container's `BROKER_SECRET` (read it with `docker exec romm-webstation printenv BROKER_SECRET`); the role keeps RomM's copy equal to it.
+- `broker_host` is the server-to-broker API on the docker network; `host` is the browser-facing URL (no `/streaming` suffix - that is `subfolder`).
+- The full block is generated from `webstation_role_platforms`; edit that list in host_vars to add or remove platforms. See RomM's [streaming reference](https://docs.romm.app/latest/reference/configuration-file/#streaming) for every key.
 
-Restart RomM after saving.
+Because the block is marked and managed, **do not hand-edit it** - change `webstation_role_platforms` (or re-run `sb install sandbox-webstation`) instead.
 
 ## Usage
 
